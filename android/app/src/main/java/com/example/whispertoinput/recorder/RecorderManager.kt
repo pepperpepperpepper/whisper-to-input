@@ -46,6 +46,7 @@ class RecorderManager(context: Context) {
     }
 
     private var recorder: MediaRecorder? = null
+    private var isRecording: Boolean = false
     private var onUpdateMicrophoneAmplitude: (Int) -> Unit = { }
     private var onRecordingStopped: (Boolean, String?) -> Unit = { _, _ -> }
     private var microphoneAmplitudeUpdateJob: Job? = null
@@ -63,6 +64,8 @@ class RecorderManager(context: Context) {
             stop()
             release()
         }
+        
+        isRecording = true
 
         recorder =
             if (Build.VERSION.SDK_INT >= MEDIA_RECORDER_CONSTRUCTOR_DEPRECATION_API_LEVEL) {
@@ -115,6 +118,7 @@ class RecorderManager(context: Context) {
     fun stop() {
         var success = true
         var errorMessage: String? = null
+        val wasRecording = isRecording
         
         try {
             recorder?.apply {
@@ -129,9 +133,12 @@ class RecorderManager(context: Context) {
             recorder = null
             microphoneAmplitudeUpdateJob?.cancel()
             microphoneAmplitudeUpdateJob = null
+            isRecording = false
             
-            // Notify callback that recording has stopped
-            onRecordingStopped(success, errorMessage)
+            // Only notify callback that recording has stopped if there was actually an active recording
+            if (wasRecording) {
+                onRecordingStopped(success, errorMessage)
+            }
         }
     }
 

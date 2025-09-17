@@ -163,11 +163,11 @@
         android:background="#00FFFFFF"
         android:contentDescription="@string/start_transcribing"
         android:scaleType="fitCenter"
+        android:layout_marginStart="32dp"
         android:src="@drawable/btn_enter"
-        android:translationX="-3dp"
-        app:layout_constraintBottom_toBottomOf="@+id/btn_space_bar"
-        app:layout_constraintEnd_toEndOf="@+id/btn_backspace"
-        app:layout_constraintTop_toTopOf="@+id/btn_space_bar" />
+        app:layout_constraintBottom_toBottomOf="@+id/btn_mic_frame"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/btn_mic_frame" />
 
     <ImageButton
         style="@style/RegularImage"
@@ -179,7 +179,7 @@
         android:scaleType="fitCenter"
         android:scaleX="0.5"
         android:scaleY="0.5"
-        android:layout_marginEnd="16dp"
+        android:layout_marginEnd="32dp"
         android:src="@drawable/btn_cancel"
         android:visibility="invisible"
         app:layout_constraintTop_toTopOf="@+id/btn_mic_frame"
@@ -196,7 +196,7 @@
         android:scaleType="fitCenter"
         android:scaleX="0.5"
         android:scaleY="0.5"
-        android:layout_marginEnd="16dp"
+        android:layout_marginEnd="32dp"
         android:src="@drawable/btn_retry"
         android:visibility="invisible"
         app:layout_constraintTop_toTopOf="@+id/btn_mic_frame"

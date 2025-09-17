@@ -338,7 +338,7 @@ class MainActivity : AppCompatActivity() {
                 SettingDropdown(R.id.spinner_add_trailing_space, ADD_TRAILING_SPACE, hashMapOf(
                     getString(R.string.settings_option_yes) to true,
                     getString(R.string.settings_option_no) to false,
-                ), false),
+                ), true),
                 SettingStringDropdown(R.id.spinner_postprocessing, POSTPROCESSING, listOf(
                     getString(R.string.settings_option_to_traditional),
                     getString(R.string.settings_option_to_simplified),

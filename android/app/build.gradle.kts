@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.whispertoinput"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 5
+        versionName = "0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -31,7 +31,18 @@ android {
                 val variant = this
                 variant.outputs.all {
                     val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-                    val outputFileName = "whisper-to-input-enhanced-${variant.versionName}-${variant.buildType.name}.apk"
+                    val outputFileName = "whisper-to-input-bytecount-fix-${variant.versionName}-${variant.buildType.name}.apk"
+                    output.outputFileName = outputFileName
+                }
+            }
+        }
+        debug {
+            // Customize APK name for debug builds too
+            applicationVariants.all {
+                val variant = this
+                variant.outputs.all {
+                    val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+                    val outputFileName = "whisper-to-input-bytecount-fix-${variant.versionName}-${variant.buildType.name}.apk"
                     output.outputFileName = outputFileName
                 }
             }
