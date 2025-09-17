@@ -319,6 +319,58 @@ class WhisperInputService : InputMethodService() {
     }
 
     /**
+     * Waits for the audio file to be completely written and stable
+     * @param timeoutMs maximum time to wait in milliseconds
+     * @return true if file is stable and ready, false otherwise
+     */
+    private suspend fun waitForAudioFileStable(filename: String, timeoutMs: Long = 5000): Boolean {
+        val startTime = System.currentTimeMillis()
+        var lastFileSize: Long = -1
+        var stableCount = 0
+        val requiredStableChecks = 3 // File size must remain stable for 3 consecutive checks
+        
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            val file = File(filename)
+            
+            if (!file.exists()) {
+                Log.d("whisper-input", "Audio file not yet available: $filename")
+                delay(100)
+                continue
+            }
+            
+            val currentSize = file.length()
+            
+            if (currentSize == lastFileSize) {
+                stableCount++
+                Log.d("whisper-input", "Audio file size stable ($stableCount/$requiredStableChecks): ${currentSize} bytes")
+                
+                if (stableCount >= requiredStableChecks) {
+                    // File size has been stable for multiple checks, consider it ready
+                    if (isAudioFileValid(filename)) {
+                        Log.i("whisper-input", "Audio file is stable and valid: $filename (${currentSize} bytes)")
+                        return true
+                    } else {
+                        Log.e("whisper-input", "Audio file is stable but invalid: $filename")
+                        return false
+                    }
+                }
+            } else {
+                // File size changed, reset stability counter
+                if (lastFileSize != -1L) {
+                    Log.d("whisper-input", "Audio file size changed from ${lastFileSize} to ${currentSize} bytes")
+                }
+                lastFileSize = currentSize
+                stableCount = 0
+            }
+            
+            delay(200) // Check every 200ms
+        }
+        
+        Log.e("whisper-input", "Audio file did not stabilize within ${timeoutMs}ms: $filename")
+        return false
+    }
+
+    /**
      * Callback for when recording has stopped
      */
     private fun onRecordingStopped(success: Boolean, errorMessage: String?) {
@@ -328,16 +380,16 @@ class WhisperInputService : InputMethodService() {
             return
         }
         
-        Log.d("whisper-input", "Recording stopped successfully, waiting for file to be ready")
+        Log.d("whisper-input", "Recording stopped successfully, waiting for file to be stable")
         
-        // Launch a coroutine to wait for the file to be ready and then start transcription
+        // Launch a coroutine to wait for the file to be stable and then start transcription
         CoroutineScope(Dispatchers.Main).launch {
-            val fileReady = waitForAudioFileReady(recordedAudioFilename)
-            if (fileReady) {
-                Log.d("whisper-input", "Audio file ready, starting transcription")
+            val fileStable = waitForAudioFileStable(recordedAudioFilename)
+            if (fileStable) {
+                Log.d("whisper-input", "Audio file stable, starting transcription")
                 startTranscriptionWithValidatedFile()
             } else {
-                Log.e("whisper-input", "Audio file not ready, transcription cancelled")
+                Log.e("whisper-input", "Audio file not stable, transcription cancelled")
                 whisperKeyboard.reset()
             }
         }
@@ -356,9 +408,6 @@ class WhisperInputService : InputMethodService() {
     }
 
     private fun onStartRecording() {
-        // Clean up any existing audio files to ensure we start with a clean slate
-        cleanupAllAudioFiles()
-        
         // Upon starting recording, check whether audio permission is granted.
         if (!recorderManager!!.allPermissionsGranted(this)) {
             // If not, launch app MainActivity (for permission setup).
