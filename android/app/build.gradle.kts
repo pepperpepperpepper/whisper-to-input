@@ -5,12 +5,13 @@ plugins {
 
 android {
     namespace = "com.example.whispertoinput"
-    compileSdk = 34
+    compileSdk = 36
+    buildToolsVersion = "35.0.1"
 
     defaultConfig {
         applicationId = "com.example.whispertoinput"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 4
         versionName = "0.4"
 
@@ -24,6 +25,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            
+            // Customize APK name
+            applicationVariants.all {
+                val variant = this
+                variant.outputs.all {
+                    val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+                    val outputFileName = "whisper-to-input-enhanced-${variant.versionName}-${variant.buildType.name}.apk"
+                    output.outputFileName = outputFileName
+                }
+            }
         }
     }
     compileOptions {

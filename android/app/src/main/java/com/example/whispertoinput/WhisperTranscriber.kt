@@ -49,6 +49,27 @@ class WhisperTranscriber {
     private val TAG = "WhisperTranscriber"
     private var currentTranscriptionJob: Job? = null
 
+    /**
+     * Validates and returns the appropriate language code based on the backend.
+     * Empty strings are replaced with backend-specific defaults.
+     */
+    private fun validateLanguageCode(languageCode: String, speechToTextBackend: String, context: Context): String {
+        return if (languageCode.isEmpty()) {
+            when (speechToTextBackend) {
+                context.getString(R.string.settings_option_openai_api) -> 
+                    context.getString(R.string.settings_option_openai_api_default_language)
+                context.getString(R.string.settings_option_nvidia_nim) -> 
+                    context.getString(R.string.settings_option_nvidia_nim_default_language)
+                context.getString(R.string.settings_option_whisper_asr_webservice) -> 
+                    "" // Whisper ASR Webservice expects empty for auto-detection
+                else -> 
+                    "" // Fallback to empty
+            }
+        } else {
+            languageCode // Use the provided language code if not empty
+        }
+    }
+
     fun startAsync(
         context: Context,
         filename: String,
@@ -71,6 +92,9 @@ class WhisperTranscriber {
                 )
             }.first()
 
+            // Validate language code and use backend-specific defaults if empty
+            val validatedLanguageCode = validateLanguageCode(languageCode, speechToTextBackend, context)
+
             // Foolproof message
             if (endpoint == "") {
                 throw Exception(context.getString(R.string.error_endpoint_unset))
@@ -84,7 +108,7 @@ class WhisperTranscriber {
                 mediaType,
                 speechToTextBackend,
                 endpoint,
-                languageCode,
+                validatedLanguageCode,
                 apiKey,
                 model
             )
@@ -125,19 +149,36 @@ class WhisperTranscriber {
             // It suspends before result is obtained.
             // Returns (transcribed string, exception message)
             val (transcribedText, exceptionMessage) = withContext(Dispatchers.IO) {
+                var transcriptionResult: String? = null
+                var errorMessage: String? = null
+                
                 try {
                     // Perform transcription here
-                    val response = makeWhisperRequest()
-                    // Clean up unused audio file after transcription
-                    // Ref: https://developer.android.com/reference/android/media/MediaRecorder#setOutputFile(java.io.File)
-                    File(filename).delete()
-                    return@withContext Pair(response, null)
+                    transcriptionResult = makeWhisperRequest()
                 } catch (e: CancellationException) {
                     // Task was canceled
-                    return@withContext Pair(null, null)
+                    errorMessage = null
                 } catch (e: Exception) {
-                    return@withContext Pair(null, e.message)
+                    errorMessage = e.message
+                } finally {
+                    // Clean up audio file in all scenarios (success, cancellation, exception)
+                    // Ref: https://developer.android.com/reference/android/media/MediaRecorder#setOutputFile(java.io.File)
+                    try {
+                        val file = File(filename)
+                        if (file.exists()) {
+                            val deleted = file.delete()
+                            if (deleted) {
+                                Log.d(TAG, "Audio file deleted: $filename")
+                            } else {
+                                Log.w(TAG, "Failed to delete audio file: $filename")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error cleaning up audio file: $filename", e)
+                    }
                 }
+                
+                return@withContext Pair(transcriptionResult, errorMessage)
             }
 
             // This callback is within the main thread.
@@ -215,7 +256,10 @@ class WhisperTranscriber {
                 addFormDataPart("response_format", "text")
             }
             if (speechToTextBackend == context.getString(R.string.settings_option_nvidia_nim)) {
-                addFormDataPart("language", languageCode)
+                // Only include language parameter if it's not empty
+                if (languageCode.isNotEmpty()) {
+                    addFormDataPart("language", languageCode)
+                }
                 addFormDataPart("response_format", "text")
             }
         }.build()
@@ -235,7 +279,9 @@ class WhisperTranscriber {
         val url = when (speechToTextBackend) {
             context.getString(R.string.settings_option_openai_api),
             context.getString(R.string.settings_option_whisper_asr_webservice) -> {
-                "$endpoint?encode=true&task=transcribe&language=$languageCode&word_timestamps=false&output=txt"
+                // Only include language parameter if it's not empty
+                val languageParam = if (languageCode.isNotEmpty()) "&language=$languageCode" else ""
+                "$endpoint?encode=true&task=transcribe${languageParam}&word_timestamps=false&output=txt"
             }
             else -> endpoint
         }

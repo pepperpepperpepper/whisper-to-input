@@ -47,6 +47,7 @@ class RecorderManager(context: Context) {
 
     private var recorder: MediaRecorder? = null
     private var onUpdateMicrophoneAmplitude: (Int) -> Unit = { }
+    private var onRecordingStopped: (Boolean, String?) -> Unit = { _, _ -> }
     private var microphoneAmplitudeUpdateJob: Job? = null
     private val amplitudeReportPeriod: Long
     private val context: Context
@@ -112,19 +113,36 @@ class RecorderManager(context: Context) {
     }
 
     fun stop() {
-        recorder?.apply {
-            stop()
-            release()
+        var success = true
+        var errorMessage: String? = null
+        
+        try {
+            recorder?.apply {
+                stop()
+                release()
+            }
+        } catch (e: Exception) {
+            Log.e("whisper-input", "Error stopping recorder: ${e.message}")
+            success = false
+            errorMessage = e.message
+        } finally {
+            recorder = null
+            microphoneAmplitudeUpdateJob?.cancel()
+            microphoneAmplitudeUpdateJob = null
+            
+            // Notify callback that recording has stopped
+            onRecordingStopped(success, errorMessage)
         }
-        recorder = null
-
-        microphoneAmplitudeUpdateJob?.cancel()
-        microphoneAmplitudeUpdateJob = null
     }
 
     // Assign onUpdateMicrophoneAmplitude callback
     fun setOnUpdateMicrophoneAmplitude(onUpdateMicrophoneAmplitude: (Int) -> Unit) {
         this.onUpdateMicrophoneAmplitude = onUpdateMicrophoneAmplitude
+    }
+
+    // Assign onRecordingStopped callback
+    fun setOnRecordingStopped(onRecordingStopped: (Boolean, String?) -> Unit) {
+        this.onRecordingStopped = onRecordingStopped
     }
 
     // Returns whether all of the permissions are granted.

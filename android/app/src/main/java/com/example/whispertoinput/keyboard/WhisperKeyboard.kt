@@ -251,11 +251,11 @@ class WhisperKeyboard {
 
     private fun onButtonEnterClick() {
         // Upon button enter click.
-        // Recording -> Start transcribing (with a newline included)
+        // Recording -> Start transcribing (without extra newline)
         // else -> invokes onEnter
         if (keyboardStatus == KeyboardStatus.Recording) {
             setKeyboardStatus(KeyboardStatus.Transcribing)
-            onStartTranscribing("\r\n")
+            onStartTranscribing("")
         } else {
             onEnter()
         }
