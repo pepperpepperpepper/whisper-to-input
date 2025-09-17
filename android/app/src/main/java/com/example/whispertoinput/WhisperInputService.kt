@@ -22,8 +22,10 @@ package com.example.whispertoinput
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.view.View
+import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.os.PowerManager
 import android.text.TextUtils
 import android.view.KeyEvent
 import android.view.inputmethod.InputMethodManager
@@ -53,6 +55,7 @@ private const val RECORDED_AUDIO_FILENAME_OGG = "recorded.ogg"
 private const val AUDIO_MEDIA_TYPE_M4A = "audio/mp4"
 private const val AUDIO_MEDIA_TYPE_OGG = "audio/ogg"
 private const val IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL = 28
+private const val WAKE_LOCK_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes maximum recording time
 
 class WhisperInputService : InputMethodService() {
     private val whisperKeyboard: WhisperKeyboard = WhisperKeyboard()
@@ -63,6 +66,10 @@ class WhisperInputService : InputMethodService() {
     private var useOggFormat: Boolean = false
     private var pendingAttachToEnd: String = ""
     private var isFirstTime: Boolean = true
+    
+    // Wake lock to prevent device sleep during recording
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wakeLockTimeoutJob: kotlinx.coroutines.Job? = null
 
     /**
      * Cleans up the recorded audio file if it exists
@@ -122,6 +129,55 @@ class WhisperInputService : InputMethodService() {
             } catch (e: Exception) {
                 Log.e("WhisperInputService", "Error cleaning up leftover audio files", e)
             }
+        }
+    }
+
+    /**
+     * Acquires a wake lock to prevent the device from sleeping during recording
+     */
+    private fun acquireWakeLock() {
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.SCREEN_DIM_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "WhisperInputService::RecordingWakeLock"
+            )
+            wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
+            Log.d("WhisperInputService", "Wake lock acquired to prevent device sleep during recording")
+            
+            // Set up timeout to automatically release wake lock after maximum recording time
+            wakeLockTimeoutJob = CoroutineScope(Dispatchers.Main).launch {
+                delay(WAKE_LOCK_TIMEOUT_MS)
+                Log.w("WhisperInputService", "Recording timeout reached, releasing wake lock")
+                releaseWakeLock()
+                // Also stop recording if it's still active
+                if (whisperKeyboard.getCurrentStatus() == WhisperKeyboard.KeyboardStatus.Recording) {
+                    Log.i("WhisperInputService", "Auto-stopping recording due to timeout")
+                    onCancelRecording()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("WhisperInputService", "Failed to acquire wake lock", e)
+        }
+    }
+
+    /**
+     * Releases the wake lock to allow the device to sleep normally
+     */
+    private fun releaseWakeLock() {
+        try {
+            wakeLockTimeoutJob?.cancel()
+            wakeLockTimeoutJob = null
+            
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d("WhisperInputService", "Wake lock released")
+                }
+            }
+            wakeLock = null
+        } catch (e: Exception) {
+            Log.e("WhisperInputService", "Failed to release wake lock", e)
         }
     }
 
@@ -311,6 +367,9 @@ class WhisperInputService : InputMethodService() {
             return
         }
 
+        // Acquire wake lock to prevent device sleep during recording
+        acquireWakeLock()
+
         recorderManager!!.start(this, recordedAudioFilename, useOggFormat)
     }
 
@@ -323,6 +382,7 @@ class WhisperInputService : InputMethodService() {
     private fun onCancelRecording() {
         recorderManager!!.stop()
         cleanupAudioFile()
+        releaseWakeLock()
     }
 
     private fun onStartTranscription(attachToEnd: String) {
@@ -330,6 +390,7 @@ class WhisperInputService : InputMethodService() {
         pendingAttachToEnd = attachToEnd
         Log.d("whisper-input", "Starting transcription process, stopping recording")
         recorderManager!!.stop()
+        releaseWakeLock()
     }
 
     private fun onCancelTranscription() {
@@ -415,6 +476,7 @@ class WhisperInputService : InputMethodService() {
         whisperKeyboard.reset()
         recorderManager!!.stop()
         cleanupAudioFile()
+        releaseWakeLock()
     }
 
     override fun onDestroy() {
@@ -423,5 +485,6 @@ class WhisperInputService : InputMethodService() {
         whisperKeyboard.reset()
         recorderManager!!.stop()
         cleanupAudioFile()
+        releaseWakeLock()
     }
 }

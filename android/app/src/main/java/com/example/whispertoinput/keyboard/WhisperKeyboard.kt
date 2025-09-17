@@ -42,7 +42,7 @@ private const val AMPLITUDE_ANIMATION_DURATION: Long = 500
 private val amplitudePowers: Array<Float> = arrayOf(0.5f, 1.0f, 2f, 3f)
 
 class WhisperKeyboard {
-    private enum class KeyboardStatus {
+    enum class KeyboardStatus {
         Idle,             // Ready to start recording
         Recording,       // Currently recording
         Transcribing,    // Waiting for transcription results
@@ -62,6 +62,13 @@ class WhisperKeyboard {
 
     // Keyboard Status
     private var keyboardStatus: KeyboardStatus = KeyboardStatus.Idle
+
+    /**
+     * Returns the current keyboard status
+     */
+    fun getCurrentStatus(): KeyboardStatus {
+        return keyboardStatus
+    }
 
     // Views & Keyboard Layout
     private var keyboardView: ConstraintLayout? = null
